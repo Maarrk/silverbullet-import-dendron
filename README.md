@@ -8,7 +8,6 @@ Open the Dendron vault as a space. Then run {[Import: Dendron]} command, the not
 
 ## Roadmap
 
-- [ ] Complete writing this, based on [Dendron Concepts](https://wiki.dendron.so/notes/c6fd6bc4-7f75-4cbb-8f34-f7b99bfe2d50/)
 - [ ] Only modify notes with Dendron frontmatter: id, title, created, modified; remove these when done
 - [ ] Detect conflicts if a created note already exists
 - [ ] Confirmation modal
@@ -24,3 +23,5 @@ Open the Dendron vault as a space. Then run {[Import: Dendron]} command, the not
 - [ ] Optional features toggled with configuration
   - [ ] Flatten hierarchy (no folders, just note titles)
     - [ ] Show error on duplicate titles, unless it's an empty tag page ([tag pages aren't expected to have content](https://github.com/silverbulletmd/silverbullet/issues/98))
+  - [ ] Put Dendron hierarchical name into `aliases`
+  - [ ] Move dendron `desc` from frontmatter into first paragraph
