@@ -1,6 +1,6 @@
 name: tutorial
 functions:
   helloWorld:
-    path: hello.ts:helloWorld
+    path: tutorial.ts:helloWorld
     command:
       name: "Tutorial: Say hello"
