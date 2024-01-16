@@ -8,7 +8,8 @@ Open the Dendron vault as a space. Then run {[Import: Dendron]} command, the not
 
 ## Roadmap
 
-- [ ] Only modify notes with Dendron frontmatter: id, title, created, modified; remove these when done
+- [x] Only import notes with Dendron frontmatter: id, title, created, modified; remove these when done
+- [ ] Separate command to clean up all Dendron notes
 - [ ] Detect conflicts if a created note already exists
 - [ ] Confirmation modal
   - [ ] Cancel operation

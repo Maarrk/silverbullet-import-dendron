@@ -1,0 +1,6 @@
+name: import-dendron
+functions:
+  listPages:
+    path: dendron.ts:importPages
+    command:
+      name: "Import: Dendron pages"
