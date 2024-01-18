@@ -12,9 +12,9 @@ Open the Dendron vault as a space. Then run {[Import: Dendron]} command, the not
 - [x] List all dendron pages, with their imported counterparts
 - [ ] Separate command to clean up all imported Dendron notes
 - [ ] Detect conflicts if a created note already exists
-- [ ] Confirmation modal on destructive operations
-  - [ ] Cancel operation
-  - [ ] Show affected files, also affected/total count
+- [x] Confirmation modal on destructive operations
+  - [x] Cancel operation
+  - [x] Show affected files, also affected/total count
 - [x] Switch order of address and display text in wikilinks
 - [ ] Change `@person` links to regular wikilinks
 - [ ] Create `$anchor` for every `#header` referenced in some link, change the link from `#` to `$` syntax

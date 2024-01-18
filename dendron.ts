@@ -12,16 +12,19 @@ import {
 import { PageMeta } from "$sb/types.ts";
 import { extractFrontmatter } from "$sb/lib/frontmatter.ts";
 
-async function listDendronPages(): Promise<
-  Array<PageMeta & { title: string }>
-> {
+type DendronPageMeta = PageMeta & {
+  title: string;
+  importAs: string;
+  imported: boolean;
+};
+
+async function listDendronPages(): Promise<DendronPageMeta[]> {
   const pages = await space.listPages();
 
   // note that this requires a newline after the ending "---"
   const frontMatterRegex = /^---\n(([^\n]|\n)*?)---\n/;
-
   // following examples from cheap_yaml.ts and client.ts to find frontmatter quickly
-  return pages.reduce(async (accPromise, page) => {
+  const dendronPages = await pages.reduce(async (accPromise, page) => {
     const acc = await accPromise;
     const text = await space.readPage(page.name);
     const match = frontMatterRegex.exec(text);
@@ -39,11 +42,59 @@ async function listDendronPages(): Promise<
     }
     return acc;
   }, Promise.resolve(Array<PageMeta & { title: string }>()));
+
+  const mapping = hierarchyMapping(dendronPages);
+  const existingPages = new Set<string>(pages.map((p) => p.name));
+  return dendronPages.map((dp) => {
+    // we're guaranteed mapping has every page in this array by `hierarchyMapping`
+    const newName = mapping.get(dp.name) as string;
+    return {
+      ...dp,
+      importAs: newName,
+      imported: existingPages.has(newName),
+    };
+  });
+}
+
+/**
+ * build a map from old dendron names to new note names
+ * @param dendronPages pageMeta with Dendron title added
+ * @returns mapping from old page name to new name
+ */
+function hierarchyMapping(
+  dendronPages: Array<PageMeta & { title: string }>
+): Map<string, string> {
+  const mapping = new Map<string, string>();
+
+  // TODO: maintain hierarchy based on config
+  for (const page of dendronPages) {
+    mapping.set(page.name, page.title);
+  }
+
+  return mapping;
 }
 
 export async function importPages() {
   const dendronPages = await listDendronPages();
   const lang = buildDendronMarkdown();
+
+  const importedPages = dendronPages.reduce((acc, p) => {
+    if (p.imported) {
+      acc.push(p.importAs);
+    }
+    return acc;
+  }, Array<string>());
+  if (importedPages.length > 0) {
+    const ok = await editor.confirm(
+      `These ${
+        importedPages.length
+      } pages would be overwritten by import: ${importedPages.join(",")}`
+    );
+    if (!ok) {
+      await editor.flashNotification("Import cancelled");
+      return;
+    }
+  }
 
   for await (const oldPage of dendronPages) {
     const tree = parse(lang, await space.readPage(oldPage.name));
@@ -119,38 +170,20 @@ export function swapLinkAliasOrder(tree: ParseTree): void {
   });
 }
 
-async function hierarchyMapping(): Promise<Record<string, string>> {
-  const dendronPages = await listDendronPages();
-  const mapping: Record<string, string> = {};
-  for (const page of dendronPages) {
-    mapping[page.name] = page.title;
-  }
-  return mapping;
-}
-
 /**
  * Create a report page, similar to "Broken Links: Show" command
  */
 export async function showState(): Promise<void> {
   const pageName = "DENDRON IMPORT";
-  const mapping = await hierarchyMapping();
-  const existingPages = new Set(
-    (await space.listPages()).map((page) => {
-      return page.name;
-    })
-  );
-
-  console.log("mapping", mapping);
-  console.log("existingPages", existingPages);
+  const dendronPages = await listDendronPages();
 
   const imported = [];
   const unimported = [];
-  for (const from in mapping) {
-    const to = mapping[from];
-    if (existingPages.has(to)) {
-      imported.push({ from: from, to: to });
+  for (const page of dendronPages) {
+    if (page.imported) {
+      imported.push({ from: page.name, to: page.importAs });
     } else {
-      unimported.push(from);
+      unimported.push(page.name);
     }
   }
 
