@@ -9,23 +9,17 @@ import {
   renderToText,
   replaceNodesMatching,
 } from "$sb/lib/tree.ts";
+import { PageMeta } from "$sb/types.ts";
+import { extractFrontmatter } from "$sb/lib/frontmatter.ts";
 
-// note that this requires a newline after the ending "---"
-const frontMatterRegex = /^---\n(([^\n]|\n)*?)---\n/;
-
-type DendronData = {
-  id: string;
-  title: string;
-  created: number;
-  modified: number;
-  desc?: string | null;
-};
-
-export async function importPages() {
+async function listDendronPages(): Promise<PageMeta[]> {
   const pages = await space.listPages();
 
+  // note that this requires a newline after the ending "---"
+  const frontMatterRegex = /^---\n(([^\n]|\n)*?)---\n/;
+
   // following examples from cheap_yaml.ts and client.ts to find frontmatter quickly
-  const dendronPages = await pages.reduce(async (accPromise, page) => {
+  return pages.reduce(async (accPromise, page) => {
     const acc = await accPromise;
     const text = await space.readPage(page.name);
     const match = frontMatterRegex.exec(text);
@@ -38,45 +32,54 @@ export async function importPages() {
         typeof data.created === "number" &&
         typeof data.modified === "number"
       ) {
-        const pageText = text.slice(match[0].length);
-        acc.push({ name: page.name, data: data, pageText: pageText });
+        acc.push(page);
       }
     }
     return acc;
-  }, Promise.resolve(Array<{ name: string; data: DendronData; pageText: string }>()));
-  // ^ this as initial value took me longer than it should have
+  }, Promise.resolve(Array<PageMeta>()));
+}
 
+export async function importPages() {
+  const dendronPages = await listDendronPages();
   const lang = buildDendronMarkdown();
 
   for await (const oldPage of dendronPages) {
-    const newName = stripQuotes(oldPage.data.title);
+    const tree = parse(lang, await space.readPage(oldPage.name));
 
-    console.log("newName", newName, "old", oldPage.name, oldPage.data.title);
+    const frontmatter = await extractFrontmatter(tree, {
+      removeFrontmatterSection: true,
+    });
 
-    const newData = oldPage.data as any; // any required to delete properties
-    delete newData.id;
-    delete newData.title;
-    delete newData.created;
-    delete newData.modified;
-    delete newData.desc;
-    newData.aliases = [oldPage.name];
+    const newName = stripQuotes(frontmatter["title"]);
+    let description: string | null = null;
+    if ("desc" in frontmatter) {
+      description = frontmatter["desc"];
+    }
+    frontmatter["aliases"] = [oldPage.name];
 
-    const tree = parse(lang, oldPage.pageText);
+    // removeKeys on extracFrontmatter didn't work as expected
+    delete frontmatter["id"];
+    delete frontmatter["desc"];
+    delete frontmatter["title"];
+    delete frontmatter["created"];
+    delete frontmatter["modified"];
+
     swapLinkAliasOrder(tree);
 
     const newText = [
       "---",
-      (await YAML.stringify(newData)).slice(0, -1), // remove trailing newline
+      (await YAML.stringify(frontmatter)).slice(0, -1), // remove trailing newline
       "---",
-      ...(typeof oldPage.data.desc === "string"
-        ? [stripQuotes(oldPage.data.desc) + "\n"]
-        : []), // conditional element
+      ...(typeof description === "string" ? [stripQuotes(description)] : []), // conditional element
       renderToText(tree),
     ].join("\n");
     await space.writePage(newName, newText);
   }
 
-  await editor.flashNotification(`Imported ${dendronPages.length} pages`);
+  const pageCount = dendronPages.length;
+  await editor.flashNotification(
+    `Imported ${pageCount} page${pageCount === 1 ? "" : "s"}`
+  );
 }
 
 /**
