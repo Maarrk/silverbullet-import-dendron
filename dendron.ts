@@ -12,7 +12,9 @@ import {
 import { PageMeta } from "$sb/types.ts";
 import { extractFrontmatter } from "$sb/lib/frontmatter.ts";
 
-async function listDendronPages(): Promise<PageMeta[]> {
+async function listDendronPages(): Promise<
+  Array<PageMeta & { title: string }>
+> {
   const pages = await space.listPages();
 
   // note that this requires a newline after the ending "---"
@@ -32,11 +34,11 @@ async function listDendronPages(): Promise<PageMeta[]> {
         typeof data.created === "number" &&
         typeof data.modified === "number"
       ) {
-        acc.push(page);
+        acc.push({ ...page, title: stripQuotes(data.title) });
       }
     }
     return acc;
-  }, Promise.resolve(Array<PageMeta>()));
+  }, Promise.resolve(Array<PageMeta & { title: string }>()));
 }
 
 export async function importPages() {
@@ -50,7 +52,7 @@ export async function importPages() {
       removeFrontmatterSection: true,
     });
 
-    const newName = stripQuotes(frontmatter["title"]);
+    const newName = oldPage.title;
     let description: string | null = null;
     if ("desc" in frontmatter) {
       description = frontmatter["desc"];
@@ -115,4 +117,50 @@ export function swapLinkAliasOrder(tree: ParseTree): void {
     t.children![3].children![0].text = aliasText;
     return t;
   });
+}
+
+async function hierarchyMapping(): Promise<Record<string, string>> {
+  const dendronPages = await listDendronPages();
+  const mapping: Record<string, string> = {};
+  for (const page of dendronPages) {
+    mapping[page.name] = page.title;
+  }
+  return mapping;
+}
+
+/**
+ * Create a report page, similar to "Broken Links: Show" command
+ */
+export async function showState(): Promise<void> {
+  const pageName = "DENDRON IMPORT";
+  const mapping = await hierarchyMapping();
+  const existingPages = new Set(
+    (await space.listPages()).map((page) => {
+      return page.name;
+    })
+  );
+
+  console.log("mapping", mapping);
+  console.log("existingPages", existingPages);
+
+  const imported = [];
+  const unimported = [];
+  for (const from in mapping) {
+    const to = mapping[from];
+    if (existingPages.has(to)) {
+      imported.push({ from: from, to: to });
+    } else {
+      unimported.push(from);
+    }
+  }
+
+  const reportText = [
+    "## Not imported",
+    ...unimported.map((from) => `* [[${from}]]`),
+    "",
+    "## Imported",
+    ...imported.map((imp) => `* [[${imp.from}]]: [[${imp.to}]]`),
+  ].join("\n");
+  await space.writePage(pageName, reportText);
+  await editor.navigate(pageName);
 }

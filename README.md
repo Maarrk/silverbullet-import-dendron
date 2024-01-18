@@ -9,9 +9,10 @@ Open the Dendron vault as a space. Then run {[Import: Dendron]} command, the not
 ## Roadmap
 
 - [x] Only import notes with Dendron frontmatter: id, title, created, modified; remove these when done
-- [ ] Separate command to clean up all Dendron notes
+- [x] List all dendron pages, with their imported counterparts
+- [ ] Separate command to clean up all imported Dendron notes
 - [ ] Detect conflicts if a created note already exists
-- [ ] Confirmation modal
+- [ ] Confirmation modal on destructive operations
   - [ ] Cancel operation
   - [ ] Show affected files, also affected/total count
 - [x] Switch order of address and display text in wikilinks

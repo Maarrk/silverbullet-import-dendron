@@ -1,6 +1,10 @@
 name: import-dendron
 functions:
-  listPages:
+  importPages:
     path: dendron.ts:importPages
     command:
-      name: "Import: Dendron pages"
+      name: "Dendron: Import pages"
+  showPages:
+    path: dendron.ts:showState
+    command:
+      name: "Dendron: Show state"
