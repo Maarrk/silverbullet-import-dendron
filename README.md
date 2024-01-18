@@ -10,8 +10,8 @@ Open the Dendron vault as a space. Then run {[Import: Dendron]} command, the not
 
 - [x] Only import notes with Dendron frontmatter: id, title, created, modified; remove these when done
 - [x] List all dendron pages, with their imported counterparts
-- [ ] Separate command to clean up all imported Dendron notes
-- [ ] Detect conflicts if a created note already exists
+- [x] Separate command to clean up all imported Dendron notes
+- [x] Detect conflicts if a created note already exists
 - [x] Confirmation modal on destructive operations
   - [x] Cancel operation
   - [x] Show affected files, also affected/total count

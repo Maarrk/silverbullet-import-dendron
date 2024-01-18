@@ -88,7 +88,7 @@ export async function importPages() {
     const ok = await editor.confirm(
       `These ${
         importedPages.length
-      } pages would be overwritten by import: ${importedPages.join(",")}`
+      } pages would be overwritten by import: ${importedPages.join(", ")}`
     );
     if (!ok) {
       await editor.flashNotification("Import cancelled");
@@ -196,4 +196,35 @@ export async function showState(): Promise<void> {
   ].join("\n");
   await space.writePage(pageName, reportText);
   await editor.navigate(pageName);
+}
+
+export async function deleteImported(): Promise<void> {
+  const dendronPages = await listDendronPages();
+
+  const pagesToRemove = dendronPages.reduce((acc, p) => {
+    if (p.imported) {
+      acc.push(p.name);
+    }
+    return acc;
+  }, Array<string>());
+
+  if (pagesToRemove.length == 0) {
+    await editor.flashNotification("No previously imported pages to delete");
+    return;
+  }
+
+  const ok = await editor.confirm(
+    `These ${pagesToRemove.length} pages will be deleted: ${pagesToRemove.join(
+      ", "
+    )}`
+  );
+  if (!ok) {
+    await editor.flashNotification("Deletion cancelled");
+    return;
+  }
+
+  for await (const name of pagesToRemove) {
+    space.deletePage(name);
+  }
+  await editor.flashNotification(`${pagesToRemove.length} pages deleted`);
 }

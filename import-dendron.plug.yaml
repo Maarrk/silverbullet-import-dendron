@@ -8,3 +8,7 @@ functions:
     path: dendron.ts:showState
     command:
       name: "Dendron: Show state"
+  deleteImported:
+    path: dendron.ts:deleteImported
+    command:
+      name: "Dendron: Delete already imported"
