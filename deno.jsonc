@@ -2,7 +2,8 @@
   "importMap": "import_map.json",
   "tasks": {
     "build": "silverbullet plug:compile --importmap import_map.json import-dendron.plug.yaml",
-    "watch": "silverbullet plug:compile --importmap import_map.json import-dendron.plug.yaml -w"
+    "watch": "silverbullet plug:compile --importmap import_map.json import-dendron.plug.yaml -w",
+    "test": "deno test --allow-env" // required by lezer
   },
   "lint": {
     "rules": {

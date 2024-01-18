@@ -1,5 +1,14 @@
 import { editor, space } from "$sb/silverbullet-syscall/mod.ts";
 import * as YAML from "$sb/plugos-syscall/yaml.ts";
+import buildMarkdown from "markdown_parser/parser.ts";
+import { parse } from "markdown_parser/parse_tree.ts";
+import { Language } from "@codemirror/language";
+import {
+  ParseTree,
+  findNodeOfType,
+  renderToText,
+  replaceNodesMatching,
+} from "$sb/lib/tree.ts";
 
 // note that this requires a newline after the ending "---"
 const frontMatterRegex = /^---\n(([^\n]|\n)*?)---\n/;
@@ -37,9 +46,9 @@ export async function importPages() {
   }, Promise.resolve(Array<{ name: string; data: DendronData; pageText: string }>()));
   // ^ this as initial value took me longer than it should have
 
-  // doesn't parse into a tree because of Dendron's syntax
+  const lang = buildDendronMarkdown();
+
   for await (const oldPage of dendronPages) {
-    // remove double and single quotes on either end
     const newName = stripQuotes(oldPage.data.title);
 
     console.log("newName", newName, "old", oldPage.name, oldPage.data.title);
@@ -52,6 +61,9 @@ export async function importPages() {
     delete newData.desc;
     newData.aliases = [oldPage.name];
 
+    const tree = parse(lang, oldPage.pageText);
+    swapLinkAliasOrder(tree);
+
     const newText = [
       "---",
       (await YAML.stringify(newData)).slice(0, -1), // remove trailing newline
@@ -59,7 +71,7 @@ export async function importPages() {
       ...(typeof oldPage.data.desc === "string"
         ? [stripQuotes(oldPage.data.desc) + "\n"]
         : []), // conditional element
-      oldPage.pageText,
+      renderToText(tree),
     ].join("\n");
     await space.writePage(newName, newText);
   }
@@ -67,6 +79,9 @@ export async function importPages() {
   await editor.flashNotification(`Imported ${dendronPages.length} pages`);
 }
 
+/**
+ * Remove matching pairs of quotes at either end
+ */
 function stripQuotes(text: string): string {
   if (
     (text.startsWith('"') && text.endsWith('"')) ||
@@ -75,4 +90,26 @@ function stripQuotes(text: string): string {
   ) {
     return stripQuotes(text.slice(1, -1));
   } else return text;
+}
+
+export function buildDendronMarkdown(): Language {
+  return buildMarkdown([]);
+}
+
+export function swapLinkAliasOrder(tree: ParseTree): void {
+  replaceNodesMatching(tree, (t) => {
+    if (t.type !== "WikiLink") return undefined;
+
+    if (!t.children || t.children.length !== 5)
+      // mark[[, page, mark|, alias, mark]]
+      return undefined;
+
+    // get the values swapped
+    const aliasText = findNodeOfType(t, "WikiLinkPage")?.children![0].text;
+    const pageText = findNodeOfType(t, "WikiLinkAlias")?.children![0].text;
+
+    t.children![1].children![0].text = pageText;
+    t.children![3].children![0].text = aliasText;
+    return t;
+  });
 }
