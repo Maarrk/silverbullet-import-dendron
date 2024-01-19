@@ -2,6 +2,7 @@ import { editor, space } from "$sb/silverbullet-syscall/mod.ts";
 import * as YAML from "$sb/plugos-syscall/yaml.ts";
 import buildMarkdown from "markdown_parser/parser.ts";
 import { parse } from "markdown_parser/parse_tree.ts";
+import { WikiLinkTag } from "markdown_parser/customtags.ts";
 import { Language } from "@codemirror/language";
 import {
   ParseTree,
@@ -117,6 +118,7 @@ export async function importPages() {
     delete frontmatter["created"];
     delete frontmatter["modified"];
 
+    replaceUserLinks(tree);
     swapLinkAliasOrder(tree);
 
     const newText = [
@@ -149,7 +151,37 @@ function stripQuotes(text: string): string {
 }
 
 export function buildDendronMarkdown(): Language {
-  return buildMarkdown([]);
+  // with the simplified buildMarkdown setup, I can only create single nodes
+  // (it uses internally match[0].length of the regex)
+  return buildMarkdown([
+    {
+      nodeType: "UserLink",
+      // same regex as Dendron, allows hyphen and period
+      regex:
+        /@[^#@|\[\]\s,;:'\"<>()?!`~«‹»›„“‟”’❝❞❮❯⹂〝〞〟＂‚‘‛❛❜❟［］【】…‥「」『』·؟،।॥‽⸘¡¿⁈⁉]+/,
+      firstCharCodes: [64 /* @ */],
+      tag: WikiLinkTag,
+    },
+  ]);
+}
+
+/**
+ * Change all nodes of type "UserLink" into correct wikilinks.
+ * Example: `@some-person` into `[[user.some-person]]`
+ * @param tree modified in place
+ */
+export function replaceUserLinks(tree: ParseTree): void {
+  const defaultLang = buildMarkdown([]);
+
+  replaceNodesMatching(tree, (t) => {
+    if (t.type !== "UserLink") return undefined;
+
+    const userName = t.children![0].text?.slice(1);
+    // I want the exact same structure as if it was just a text replacement,
+    // but it's more efficient and correct to do it on the tree
+    // HACK: Changes length, messing up positions of everything after
+    return parse(defaultLang, `[[user.${userName}]]`);
+  });
 }
 
 export function swapLinkAliasOrder(tree: ParseTree): void {
@@ -164,6 +196,7 @@ export function swapLinkAliasOrder(tree: ParseTree): void {
     const aliasText = findNodeOfType(t, "WikiLinkPage")?.children![0].text;
     const pageText = findNodeOfType(t, "WikiLinkAlias")?.children![0].text;
 
+    // HACK: Doesn't update the position of the pipe mark
     t.children![1].children![0].text = pageText;
     t.children![3].children![0].text = aliasText;
     return t;

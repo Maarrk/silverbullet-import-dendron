@@ -1,7 +1,15 @@
-import { assertEquals } from "std/assert";
+import { assert, assertEquals } from "std/assert";
 import { parse } from "markdown_parser/parse_tree.ts";
-import { findNodeOfType, renderToText } from "$sb/lib/tree.ts";
-import { buildDendronMarkdown, swapLinkAliasOrder } from "./dendron.ts";
+import {
+  collectNodesOfType,
+  findNodeOfType,
+  renderToText,
+} from "$sb/lib/tree.ts";
+import {
+  buildDendronMarkdown,
+  replaceUserLinks,
+  swapLinkAliasOrder,
+} from "./dendron.ts";
 
 const dendronSample = `---
 type: page
@@ -29,4 +37,30 @@ Deno.test("aliased links", () => {
 
   const aliasNode = findNodeOfType(tree, "WikiLinkAlias");
   assertEquals(aliasNode?.children![0].text, "aliased");
+});
+
+Deno.test("user tags to links", () => {
+  const lang = buildDendronMarkdown();
+  let tree = parse(lang, dendronSample);
+
+  let userLinkNode = findNodeOfType(tree, "UserLink");
+  assertEquals(userLinkNode?.children![0].text, "@name-surname");
+
+  replaceUserLinks(tree);
+
+  userLinkNode = findNodeOfType(tree, "UserLink");
+  assert(userLinkNode === null || userLinkNode === undefined);
+
+  const links = collectNodesOfType(tree, "WikiLink");
+  assertEquals(links.length, 3);
+  let nameNode = findNodeOfType(links[2], "WikiLinkPage");
+  assertEquals(nameNode?.children![0].text, "user.name-surname");
+
+  tree = parse(lang, "Czy zadziała @Brzęczyszczykiewicz.Grzegorz?");
+  replaceUserLinks(tree);
+  nameNode = findNodeOfType(tree, "WikiLinkPage");
+  assertEquals(
+    nameNode?.children![0].text,
+    "user.Brzęczyszczykiewicz.Grzegorz"
+  );
 });
