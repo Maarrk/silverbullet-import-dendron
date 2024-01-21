@@ -15,15 +15,23 @@ import { extractFrontmatter } from "$sb/lib/frontmatter.ts";
 
 type DendronPageMeta = PageMeta & {
   title: string;
+  contentLength: number;
   importAs: string;
   imported: boolean;
 };
 
+/**
+ * Empty tag pages are not considered duplicates
+ */
+function isEmptyTag(page: DendronPageMeta) {
+  return page.name.startsWith("tags.") && page.contentLength === 0;
+}
+
 async function listDendronPages(): Promise<DendronPageMeta[]> {
   const pages = await space.listPages();
 
-  // note that this requires a newline after the ending "---"
-  const frontMatterRegex = /^---\n(([^\n]|\n)*?)---\n/;
+  // note that this doesn't check for a newline after the ending "---"
+  const frontMatterRegex = /^---\n(([^\n]|\n)*?)---/;
   // following examples from cheap_yaml.ts and client.ts to find frontmatter quickly
   const dendronPages = await pages.reduce(async (accPromise, page) => {
     const acc = await accPromise;
@@ -36,13 +44,20 @@ async function listDendronPages(): Promise<DendronPageMeta[]> {
         typeof data.id === "string" &&
         typeof data.title === "string" &&
         typeof data.created === "number" &&
-        typeof data.modified === "number"
+        typeof data.updated === "number"
       ) {
-        acc.push({ ...page, title: stripQuotes(data.title) });
+        const content = text.slice(match[0].length).trim();
+        acc.push({
+          ...page,
+          title: stripQuotes(data.title),
+          contentLength: content.length,
+        });
+      } else {
+        console.log(data);
       }
     }
     return acc;
-  }, Promise.resolve(Array<PageMeta & { title: string }>()));
+  }, Promise.resolve(Array<PageMeta & { title: string; contentLength: number }>()));
 
   const mapping = hierarchyMapping(dendronPages);
   const existingPages = new Set<string>(pages.map((p) => p.name));
@@ -78,6 +93,23 @@ function hierarchyMapping(
 export async function importPages() {
   const dendronPages = await listDendronPages();
   const lang = buildDendronMarkdown();
+
+  {
+    const importNames = new Set<string>();
+    for (const page of dendronPages) {
+      if (isEmptyTag(page)) continue;
+
+      if (importNames.has(page.importAs)) {
+        await editor.flashNotification(
+          'Some page titles are conflicting, check "Dendron: Show state" command',
+          "error"
+        );
+        return;
+      } else {
+        importNames.add(page.importAs);
+      }
+    }
+  }
 
   const importedPages = dendronPages.reduce((acc, p) => {
     if (p.imported) {
@@ -116,7 +148,7 @@ export async function importPages() {
     delete frontmatter["desc"];
     delete frontmatter["title"];
     delete frontmatter["created"];
-    delete frontmatter["modified"];
+    delete frontmatter["updated"];
 
     replaceUserLinks(tree);
     swapLinkAliasOrder(tree);
@@ -210,22 +242,43 @@ export async function showState(): Promise<void> {
   const pageName = "DENDRON IMPORT";
   const dendronPages = await listDendronPages();
 
+  const pagesByTitle = new Map<string, DendronPageMeta[]>();
   const imported = [];
   const unimported = [];
   for (const page of dendronPages) {
+    const title = page.importAs;
+    if (pagesByTitle.has(title)) {
+      pagesByTitle.get(title)?.push(page);
+    } else {
+      pagesByTitle.set(title, [page]);
+    }
+
     if (page.imported) {
       imported.push({ from: page.name, to: page.importAs });
     } else {
       unimported.push(page.name);
     }
   }
+  const conflictLines = [];
+  for (const [title, pages] of pagesByTitle) {
+    if (pages.length > 1 && pages.filter((p) => !isEmptyTag(p)).length > 1) {
+      conflictLines.push(`* [[${title}]]:`);
+      for (const page of pages) {
+        conflictLines.push(`  * [[${page.name}]]`);
+      }
+    }
+  }
 
   const reportText = [
+    "## Conflicting",
+    ...conflictLines,
+    conflictLines.length === 0 ? "*(none)*\n" : "",
     "## Not imported",
     ...unimported.map((from) => `* [[${from}]]`),
-    "",
+    unimported.length === 0 ? "*(none)*\n" : "",
     "## Imported",
     ...imported.map((imp) => `* [[${imp.from}]]: [[${imp.to}]]`),
+    imported.length === 0 ? "*(none)*\n" : "",
   ].join("\n");
   await space.writePage(pageName, reportText);
   await editor.navigate(pageName);
