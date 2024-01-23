@@ -21,10 +21,10 @@ Open the Dendron vault as a space. Then run {[Import: Dendron]} command, the not
 - [ ] Convert [Note References](https://wiki.dendron.so/notes/f1af56bb-db27-47ae-8406-61a98de6c78c/) to [Live Templates](https://silverbullet.md/Live%20Templates) showing the same amount of context
 - [x] Ensure page tags are imported
 - [ ] Ensure inline (`$\alpha$`) and block KaTeX math expressions (`$$ \alpha = \beta $$`) don't conflict with SilverBullet `$anchors`.
-- [ ] Configuration following other plugs
-- [ ] Optional features toggled with configuration
-  - [ ] Flatten hierarchy (no folders, just note titles)
-    - [ ] Allow configuration for some hierarchy to remain, like `user.` to `people/`
+- [x] Configuration following other plugs
+- [x] Optional features toggled with configuration
+  - [x] Flatten hierarchy (no folders, just note titles)
+    - [x] Allow configuration for some hierarchy to remain, like `user.` to `People/`
     - [x] Show error on duplicate titles, unless it's an empty tag page ([tag pages aren't expected to have content](https://github.com/silverbulletmd/silverbullet/issues/98))
   - [x] Put Dendron hierarchical name into `aliases`
   - [x] Move dendron `desc` from frontmatter into first paragraph

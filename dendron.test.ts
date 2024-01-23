@@ -7,9 +7,12 @@ import {
 } from "$sb/lib/tree.ts";
 import {
   buildDendronMarkdown,
+  defaultConfig,
+  hierarchyMapping,
   replaceUserLinks,
   swapLinkAliasOrder,
 } from "./dendron.ts";
+import { PageMeta } from "$sb/types.ts";
 
 const dendronSample = `---
 type: page
@@ -62,5 +65,90 @@ Deno.test("user tags to links", () => {
   assertEquals(
     nameNode?.children![0].text,
     "user.Brzęczyszczykiewicz.Grzegorz"
+  );
+});
+
+Deno.test("changing hierarchy", () => {
+  const config = defaultConfig;
+  type TitledMeta = PageMeta & { title: string };
+  let pages: TitledMeta[] = [];
+  const makePage: (name: string, title: string) => TitledMeta = (
+    name: string,
+    title: string
+  ) => {
+    return {
+      ref: "",
+      tags: [],
+      name,
+      created: "2024-01-23",
+      lastModified: "2024-01-23",
+      perm: "rw",
+      title,
+    };
+  };
+
+  // Zero pages
+  assertEquals(hierarchyMapping(pages, config), new Map<string, string>());
+
+  // One simple page
+  pages = [makePage("tla", "Three Letter Acronym")];
+  assertEquals(
+    hierarchyMapping(pages, config),
+    new Map([["tla", "Three Letter Acronym"]])
+  );
+
+  // Use parent pages for folder names
+  config.flattenHierarchy = false;
+  pages = [makePage("topic.detail", "Detail"), makePage("topic", "Topic")];
+  assertEquals(
+    hierarchyMapping(pages, config),
+    new Map([
+      ["topic", "Topic"],
+      ["topic.detail", "Topic/Detail"],
+    ])
+  );
+
+  // Flatten hierarchy to last page
+  config.flattenHierarchy = true;
+  pages = [makePage("topic.detail", "Detail"), makePage("topic", "Topic")];
+  assertEquals(
+    hierarchyMapping(pages, config),
+    new Map([
+      ["topic", "Topic"],
+      ["topic.detail", "Detail"],
+    ])
+  );
+
+  // Generate missing titles like dendron, see https://wiki.dendron.so/notes/8d3c8142-7481-40da-9a5c-69a3d4bab697/#naming
+  config.flattenHierarchy = false;
+  pages = [
+    makePage("awesome-apples.page", "Page"),
+    makePage("Custom-Capitalization.page", "Page"),
+  ];
+  assertEquals(
+    hierarchyMapping(pages, config),
+    new Map([
+      ["awesome-apples.page", "Awesome Apples/Page"],
+      ["Custom-Capitalization.page", "Custom-Capitalization/Page"],
+    ])
+  );
+
+  // Maintain overriden names
+  config.flattenHierarchy = true;
+  config.nameOverrides = {
+    users: "People",
+  };
+  pages = [
+    makePage("topic.detail", "Detail"),
+    makePage("users.person", "Person"),
+    makePage("users.org.member", "Member"),
+  ];
+  assertEquals(
+    hierarchyMapping(pages, config),
+    new Map([
+      ["topic.detail", "Detail"],
+      ["users.person", "People/Person"],
+      ["users.org.member", "People/Member"],
+    ])
   );
 });

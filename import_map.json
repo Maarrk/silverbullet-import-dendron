@@ -19,6 +19,7 @@
     "@codemirror/lang-html": "https://esm.sh/@codemirror/lang-html@6.4.7?external=@codemirror/language,@codemirror/autocomplete,@codemirror/lang-css,@codemirror/state,@lezer/lr,@lezer/html&target=es2022",
     "@codemirror/search": "https://esm.sh/@codemirror/search@6.5.5?external=@codemirror/state,@codemirror/view&target=es2022",
     "preact": "https://esm.sh/preact@10.11.1",
-    "handlebars": "https://esm.sh/handlebars@4.7.7?target=es2022"
+    "handlebars": "https://esm.sh/handlebars@4.7.7?target=es2022",
+    "title": "https://esm.sh/title@3.5.3"
   }
 }

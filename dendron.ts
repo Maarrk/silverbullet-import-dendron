@@ -12,13 +12,29 @@ import {
 } from "$sb/lib/tree.ts";
 import { PageMeta } from "$sb/types.ts";
 import { extractFrontmatter } from "$sb/lib/frontmatter.ts";
+import { readSetting } from "$sb/lib/settings_page.ts";
+import title from "title";
 
-type DendronPageMeta = PageMeta & {
+export type DendronPageMeta = PageMeta & {
   title: string;
   contentLength: number;
   importAs: string;
   imported: boolean;
 };
+
+export type Config = {
+  flattenHierarchy: boolean;
+  nameOverrides: Record<string, string>;
+};
+
+export const defaultConfig: Config = {
+  flattenHierarchy: false,
+  nameOverrides: {},
+};
+
+async function getConfig(): Promise<Config> {
+  return { ...defaultConfig, ...(await readSetting("dendron", {})) };
+}
 
 /**
  * Empty tag pages are not considered duplicates
@@ -28,6 +44,7 @@ function isEmptyTag(page: DendronPageMeta) {
 }
 
 async function listDendronPages(): Promise<DendronPageMeta[]> {
+  const config = await getConfig();
   const pages = await space.listPages();
 
   // note that this doesn't check for a newline after the ending "---"
@@ -52,14 +69,12 @@ async function listDendronPages(): Promise<DendronPageMeta[]> {
           title: stripQuotes(data.title),
           contentLength: content.length,
         });
-      } else {
-        console.log(data);
       }
     }
     return acc;
   }, Promise.resolve(Array<PageMeta & { title: string; contentLength: number }>()));
 
-  const mapping = hierarchyMapping(dendronPages);
+  const mapping = hierarchyMapping(dendronPages, config);
   const existingPages = new Set<string>(pages.map((p) => p.name));
   return dendronPages.map((dp) => {
     // we're guaranteed mapping has every page in this array by `hierarchyMapping`
@@ -74,20 +89,70 @@ async function listDendronPages(): Promise<DendronPageMeta[]> {
 
 /**
  * build a map from old dendron names to new note names
- * @param dendronPages pageMeta with Dendron title added
+ * @param dendronPages list of pages in the space to map
+ * @param config plug configuration (passed in for testing)
  * @returns mapping from old page name to new name
  */
-function hierarchyMapping(
-  dendronPages: Array<PageMeta & { title: string }>
+export function hierarchyMapping(
+  dendronPages: Array<PageMeta & { title: string }>,
+  config: Config
 ): Map<string, string> {
-  const mapping = new Map<string, string>();
+  const dendronSeparator = ".";
+  const spaceSeparator = "/";
 
-  // TODO: maintain hierarchy based on config
-  for (const page of dendronPages) {
-    mapping.set(page.name, page.title);
+  dendronPages.sort((a, b) => {
+    // by number of name parts
+    return (
+      a.name.split(dendronSeparator).length -
+      b.name.split(dendronSeparator).length
+    );
+  });
+
+  const partMapping = new Map<string, string>();
+  if (!config.flattenHierarchy) {
+    // for each name sub sequence add mapping to title
+    for (const page of dendronPages) {
+      const parts = page.name.split(dendronSeparator);
+      for (let count = 1; count <= parts.length; count++) {
+        const subPart = parts.slice(0, count).join(dendronSeparator);
+        if (count === parts.length) {
+          // full page path, save the title
+          partMapping.set(subPart, page.title);
+        } else if (!partMapping.has(subPart)) {
+          // this path is missing, generate title
+          if (subPart.toLowerCase() === subPart) {
+            // no capitalization, make a title
+            partMapping.set(subPart, title(parts[count - 1].replace("-", " ")));
+          } else {
+            // preserve custom capitalization
+            partMapping.set(subPart, parts[count - 1]);
+          }
+        }
+      }
+    }
+  }
+  // override these mappings with ones from config
+  for (const subPart in config.nameOverrides) {
+    partMapping.set(subPart, config.nameOverrides[subPart]);
   }
 
-  return mapping;
+  const pageMapping = new Map<string, string>();
+  for (const page of dendronPages) {
+    // for each subsequence of parts of name, add part to new name
+    const dendronParts = page.name.split(dendronSeparator);
+    const spaceParts = [];
+    for (let count = 1; count < dendronParts.length; count++) {
+      const subPart = dendronParts.slice(0, count).join(dendronSeparator);
+      if (partMapping.has(subPart)) {
+        spaceParts.push(partMapping.get(subPart));
+      }
+    }
+    spaceParts.push(page.title);
+
+    pageMapping.set(page.name, spaceParts.join(spaceSeparator));
+  }
+
+  return pageMapping;
 }
 
 export async function importPages() {
