@@ -10,6 +10,7 @@ import {
   defaultConfig,
   hierarchyMapping,
   replaceUserLinks,
+  replacePageLinks,
   swapLinkAliasOrder,
 } from "./dendron.ts";
 import { PageMeta } from "$sb/types.ts";
@@ -22,9 +23,7 @@ tags: [higher.lower, multi-part]
 
 Here is a [[page.link]] and an [[aliased|page.with.deep.hierarchy]].
 
-This is a user link @name-surname, which shouldn't include the comma.
-
-Supper`;
+This is a user link @name-surname, which shouldn't include the comma.`;
 
 Deno.test("basic language", () => {
   const lang = buildDendronMarkdown();
@@ -151,4 +150,21 @@ Deno.test("changing hierarchy", () => {
       ["users.org.member", "People/Member"],
     ])
   );
+});
+
+Deno.test("replacing links", () => {
+  const lang = buildDendronMarkdown();
+  const mapping = new Map([
+    ["page.link", "Link"],
+    ["page.with.deep.hierarchy", "Deep Hierarchy"],
+  ]);
+  const tree = parse(lang, dendronSample);
+
+  swapLinkAliasOrder(tree);
+  replacePageLinks(tree, mapping);
+
+  const links = collectNodesOfType(tree, "WikiLinkPage");
+  assertEquals(links.length, 2);
+  assertEquals(links[0].children![0].text, "Link");
+  assertEquals(links[1].children![0].text, "Deep Hierarchy");
 });

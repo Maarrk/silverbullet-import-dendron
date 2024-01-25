@@ -24,22 +24,29 @@ export type DendronPageMeta = PageMeta & {
 
 export type Config = {
   flattenHierarchy: boolean;
+  aliasOldName: boolean;
+  includeDescription: boolean;
+  linkParent: boolean | string;
   nameOverrides: Record<string, string>;
 };
 
 export const defaultConfig: Config = {
   flattenHierarchy: false,
+  aliasOldName: false,
+  includeDescription: true,
+  linkParent: false,
   nameOverrides: {},
 };
+
+const dendronSeparator = ".";
+const spaceSeparator = "/";
 
 async function getConfig(): Promise<Config> {
   return { ...defaultConfig, ...(await readSetting("dendron", {})) };
 }
 
-/**
- * Empty tag pages are not considered duplicates
- */
-function isEmptyTag(page: DendronPageMeta) {
+function ignoreDuplicate(page: DendronPageMeta) {
+  // Empty tag pages are not considered duplicates
   return page.name.startsWith("tags.") && page.contentLength === 0;
 }
 
@@ -97,9 +104,6 @@ export function hierarchyMapping(
   dendronPages: Array<PageMeta & { title: string }>,
   config: Config
 ): Map<string, string> {
-  const dendronSeparator = ".";
-  const spaceSeparator = "/";
-
   dendronPages.sort((a, b) => {
     // by number of name parts
     return (
@@ -156,13 +160,15 @@ export function hierarchyMapping(
 }
 
 export async function importPages() {
+  const config = await getConfig();
   const dendronPages = await listDendronPages();
+  const mapping = hierarchyMapping(dendronPages, config); // FIXME: Avoid duplicate calculations
   const lang = buildDendronMarkdown();
 
   {
     const importNames = new Set<string>();
     for (const page of dendronPages) {
-      if (isEmptyTag(page)) continue;
+      if (ignoreDuplicate(page)) continue;
 
       if (importNames.has(page.importAs)) {
         await editor.flashNotification(
@@ -173,6 +179,25 @@ export async function importPages() {
       } else {
         importNames.add(page.importAs);
       }
+    }
+  }
+
+  const parentTemplateRegex = /{{\s*parent\s*}}/;
+  let parentTemplate: string | null = null;
+  if (config.linkParent) {
+    if (typeof config.linkParent === "string" && config.linkParent.length > 0) {
+      const match = parentTemplateRegex.exec(config.linkParent);
+      if (match) {
+        parentTemplate = config.linkParent;
+      } else {
+        await editor.flashNotification(
+          'The linkParent setting must be either boolean or a string containing "{{parent}}"',
+          "error"
+        );
+        return;
+      }
+    } else {
+      parentTemplate = "{{parent}}";
     }
   }
 
@@ -201,14 +226,36 @@ export async function importPages() {
       removeFrontmatterSection: true,
     });
 
-    const newName = oldPage.title;
+    const newName = mapping.get(oldPage.name) as string;
     let description: string | null = null;
-    if ("desc" in frontmatter) {
+    if (config.includeDescription && "desc" in frontmatter) {
       description = frontmatter["desc"];
     }
-    frontmatter["aliases"] = [oldPage.name];
+    if (config.aliasOldName) {
+      // FIXME: preserve aliases if existing but don't insert duplicates
+      frontmatter["aliases"] = [oldPage.name];
+    }
+    let parentLink: string | null = null;
+    if (
+      typeof parentTemplate === "string" &&
+      oldPage.name.split(dendronSeparator).length > 1
+    ) {
+      const parentPageOldName = oldPage.name
+        .split(dendronSeparator)
+        .slice(0, -1)
+        .join(dendronSeparator);
+      console.log("parentPageOldName", parentPageOldName, mapping);
+      const parentPageName = mapping.get(parentPageOldName);
+      if (parentPageName) {
+        // won't link to non-existing pages
+        parentLink = parentTemplate.replace(
+          parentTemplateRegex,
+          parentPageName
+        );
+      }
+    }
 
-    // removeKeys on extracFrontmatter didn't work as expected
+    // removeKeys on extractFrontmatter didn't work as expected
     delete frontmatter["id"];
     delete frontmatter["desc"];
     delete frontmatter["title"];
@@ -217,12 +264,14 @@ export async function importPages() {
 
     replaceUserLinks(tree);
     swapLinkAliasOrder(tree);
+    replacePageLinks(tree, mapping);
 
     const newText = [
       "---",
       (await YAML.stringify(frontmatter)).slice(0, -1), // remove trailing newline
       "---",
       ...(typeof description === "string" ? [stripQuotes(description)] : []), // conditional element
+      ...(typeof parentLink === "string" ? [parentLink] : []), // conditional element
       renderToText(tree),
     ].join("\n");
     await space.writePage(newName, newText);
@@ -300,6 +349,22 @@ export function swapLinkAliasOrder(tree: ParseTree): void {
   });
 }
 
+export function replacePageLinks(
+  tree: ParseTree,
+  mapping: Map<string, string>
+) {
+  replaceNodesMatching(tree, (t) => {
+    if (t.type !== "WikiLinkPage") return undefined;
+
+    const oldName = t.children![0].text;
+    if (oldName && mapping.has(oldName)) {
+      t.children![0].text = mapping.get(oldName);
+    }
+    // leave the original content if the mapping is missing this link
+    return t;
+  });
+}
+
 /**
  * Create a report page, similar to "Broken Links: Show" command
  */
@@ -326,7 +391,10 @@ export async function showState(): Promise<void> {
   }
   const conflictLines = [];
   for (const [title, pages] of pagesByTitle) {
-    if (pages.length > 1 && pages.filter((p) => !isEmptyTag(p)).length > 1) {
+    if (
+      pages.length > 1 &&
+      pages.filter((p) => !ignoreDuplicate(p)).length > 1
+    ) {
       conflictLines.push(`* [[${title}]]:`);
       for (const page of pages) {
         conflictLines.push(`  * [[${page.name}]]`);
