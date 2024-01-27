@@ -24,6 +24,7 @@ They can be used for the following:
 - `flattenHierarchy`: create pages in the main folder, instead of creating folders for every level of Dendroin hierarchy
 - `aliasOldName`: place old filename in `aliases` field of the frontmatter
 - `includeDescription`: place contents of `desc` field used by Dendron as first paragraph of text
+- `allowSkippedContent`: proceed with import when some skipped pages weren't empty
 - `linkParent`: place a link to dendron parent note if it exists in a paragraph at the start of text; the value can be either boolean (i.e. `true`) to place just the link, or text like `Parent note: {{parent}}`
 - `nameOverrides`: mapping from complete dendron path to new folder names; this will be used even if `flattenHierarchy` is set
 
@@ -34,7 +35,7 @@ They can be used for the following:
 - [x] Separate command to clean up all imported Dendron notes
 - [x] Detect conflicts if a created note already exists
   - [x] Show error on duplicate titles, unless it's an empty tag page ([tag pages aren't expected to have content](https://github.com/silverbulletmd/silverbullet/issues/98))
-  - [ ] Report error if tag page has any content
+  - [x] Report error if tag page has any content
 - [x] Confirmation modal on destructive operations
   - [x] Cancel operation
   - [x] Show affected files, also affected/total count

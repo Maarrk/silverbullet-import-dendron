@@ -26,6 +26,7 @@ export type Config = {
   flattenHierarchy: boolean;
   aliasOldName: boolean;
   includeDescription: boolean;
+  allowSkippedContent: boolean;
   linkParent: boolean | string;
   nameOverrides: Record<string, string>;
 };
@@ -34,6 +35,7 @@ export const defaultConfig: Config = {
   flattenHierarchy: false,
   aliasOldName: false,
   includeDescription: true,
+  allowSkippedContent: false,
   linkParent: false,
   nameOverrides: {},
 };
@@ -45,9 +47,9 @@ async function getConfig(): Promise<Config> {
   return { ...defaultConfig, ...(await readSetting("dendron", {})) };
 }
 
-function ignoreDuplicate(page: DendronPageMeta) {
-  // Empty tag pages are not considered duplicates
-  return page.name.startsWith("tags.") && page.contentLength === 0;
+function notImportable(page: DendronPageMeta) {
+  // Tag pages are special pages just with backlinks, no point in importing them
+  return page.name.startsWith("tags.");
 }
 
 async function listDendronPages(): Promise<DendronPageMeta[]> {
@@ -161,15 +163,15 @@ export function hierarchyMapping(
 
 export async function importPages() {
   const config = await getConfig();
-  const dendronPages = await listDendronPages();
+  let dendronPages = await listDendronPages();
   const mapping = hierarchyMapping(dendronPages, config); // FIXME: Avoid duplicate calculations
   const lang = buildDendronMarkdown();
 
+  const skippedPages = dendronPages.filter((p) => notImportable(p));
+  dendronPages = dendronPages.filter((p) => !notImportable(p));
   {
     const importNames = new Set<string>();
     for (const page of dendronPages) {
-      if (ignoreDuplicate(page)) continue;
-
       if (importNames.has(page.importAs)) {
         await editor.flashNotification(
           'Some page titles are conflicting, check "Dendron: Show state" command',
@@ -178,6 +180,19 @@ export async function importPages() {
         return;
       } else {
         importNames.add(page.importAs);
+      }
+    }
+  }
+  for (const page of skippedPages) {
+    if (page.contentLength > 0) {
+      await editor.flashNotification(
+        'Some skipped pages have content, check "Dendron: Show state" command',
+        config.allowSkippedContent ? "info" : "error"
+      );
+      if (config.allowSkippedContent) {
+        break;
+      } else {
+        return;
       }
     }
   }
@@ -279,7 +294,9 @@ export async function importPages() {
 
   const pageCount = dendronPages.length;
   await editor.flashNotification(
-    `Imported ${pageCount} page${pageCount === 1 ? "" : "s"}`
+    `Imported ${pageCount} page${pageCount === 1 ? "" : "s"}, skipped ${
+      skippedPages.length
+    }`
   );
 }
 
@@ -376,6 +393,8 @@ export async function showState(): Promise<void> {
   const imported = [];
   const unimported = [];
   for (const page of dendronPages) {
+    if (notImportable(page)) continue;
+
     const title = page.importAs;
     if (pagesByTitle.has(title)) {
       pagesByTitle.get(title)?.push(page);
@@ -389,12 +408,16 @@ export async function showState(): Promise<void> {
       unimported.push(page.name);
     }
   }
+  const notImportableLines = dendronPages
+    .filter((p) => notImportable(p))
+    .map(
+      (p) =>
+        `* [[${p.name}]] ${p.contentLength > 0 ? "**has content**" : "*empty*"}`
+    );
+
   const conflictLines = [];
   for (const [title, pages] of pagesByTitle) {
-    if (
-      pages.length > 1 &&
-      pages.filter((p) => !ignoreDuplicate(p)).length > 1
-    ) {
+    if (pages.length > 1 && pages.filter((p) => !notImportable(p)).length > 1) {
       conflictLines.push(`* [[${title}]]:`);
       for (const page of pages) {
         conflictLines.push(`  * [[${page.name}]]`);
@@ -403,7 +426,12 @@ export async function showState(): Promise<void> {
   }
 
   const reportText = [
-    "## Conflicting",
+    "Show this report with {[Dendron: Show state]} command\n",
+    "## Not importable",
+    "Tag pages in SilverBullet can't hold content",
+    ...notImportableLines,
+    notImportableLines.length === 0 ? "*(none)*\n" : "",
+    "## Duplicate titles",
     ...conflictLines,
     conflictLines.length === 0 ? "*(none)*\n" : "",
     "## Not imported",
