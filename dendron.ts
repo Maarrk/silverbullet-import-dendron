@@ -61,7 +61,7 @@ async function listDendronPages(): Promise<DendronPageMeta[]> {
   // following examples from cheap_yaml.ts and client.ts to find frontmatter quickly
   const dendronPages = await pages.reduce(async (accPromise, page) => {
     const acc = await accPromise;
-    const text = await space.readPage(page.name);
+    const text = await space.readPage(page.name); // FIXME: Get as Object instead of full text
     const match = frontMatterRegex.exec(text);
     if (match) {
       const data = await YAML.parse(match[1]);
@@ -259,7 +259,6 @@ export async function importPages() {
         .split(dendronSeparator)
         .slice(0, -1)
         .join(dendronSeparator);
-      console.log("parentPageOldName", parentPageOldName, mapping);
       const parentPageName = mapping.get(parentPageOldName);
       if (parentPageName) {
         // won't link to non-existing pages
