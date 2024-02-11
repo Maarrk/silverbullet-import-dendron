@@ -2,6 +2,14 @@
 
 Dendron import is a plug for [SilverBullet](https://silverbullet.md) that converts note files created in a [Dendron](https://www.dendron.so/) [vault](https://wiki.dendron.so/notes/6682fca0-65ed-402c-8634-94cd51463cc4/) to SilverBullet [space](https://silverbullet.md/Spaces)
 
+> [!WARNING]
+> This plug is deprecated because of changes in SilverBullet 0.6.1 (see below).
+> Also it already served me to import my notes, so there is little motivation to improve it.
+
+> Plugs now can no longer define their own markdown syntax, migrated all plug-specific syntax into the main parser. This should remove a bunch of editor “flashing”, especially during sync.
+>
+> source: [SilverBullet CHANGELOG for 0.6.1](https://silverbullet.md/CHANGELOG#0.6.1)
+
 ## Usage
 
 Open the Dendron vault as a space. Then run {[Import: Dendron]} command, the note files will be modified in-place.
@@ -41,7 +49,8 @@ They can be used for the following:
   - [x] Show affected files, also affected/total count
 - [x] Switch order of address and display text in wikilinks
 - [x] Change `@person` links to regular wikilinks
-- [ ] Create `$anchor` for every `#header` referenced in some link, change the link from `#` to `$` syntax
+  - [ ] Don't affect e-mail adresses
+- [ ] Change links referring to a specific header with `#` to use the header as written, instead of a slug
 - [ ] Convert [Note References](https://wiki.dendron.so/notes/f1af56bb-db27-47ae-8406-61a98de6c78c/) to [Live Templates](https://silverbullet.md/Live%20Templates) showing the same amount of context
 - [x] Ensure page tags are imported
 - [ ] Ensure inline (`$\alpha$`) and block KaTeX math expressions (`$$ \alpha = \beta $$`) don't conflict with SilverBullet `$anchors`.

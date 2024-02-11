@@ -1,6 +1,7 @@
 import { assert, assertEquals } from "std/assert";
 import { parse } from "markdown_parser/parse_tree.ts";
 import {
+  ParseTree,
   collectNodesOfType,
   findNodeOfType,
   renderToText,
@@ -23,7 +24,8 @@ tags: [higher.lower, multi-part]
 
 Here is a [[page.link]] and an [[aliased|page.with.deep.hierarchy]].
 
-This is a user link @name-surname, which shouldn't include the comma.`;
+This is a user link @name-surname, which shouldn't include the comma.
+But this e-mail address user@example.com shouldn't be converted.`;
 
 Deno.test("basic language", () => {
   const lang = buildDendronMarkdown();
@@ -45,8 +47,11 @@ Deno.test("user tags to links", () => {
   const lang = buildDendronMarkdown();
   let tree = parse(lang, dendronSample);
 
-  let userLinkNode = findNodeOfType(tree, "UserLink");
-  assertEquals(userLinkNode?.children![0].text, "@name-surname");
+  const userLinks = collectNodesOfType(tree, "UserLink");
+  assertEquals(userLinks.length, 1);
+
+  let userLinkNode: ParseTree | null = userLinks[0];
+  assertEquals(userLinks[0].children![0].text, "@name-surname");
 
   replaceUserLinks(tree);
 
